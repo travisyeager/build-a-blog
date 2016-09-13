@@ -1,25 +1,64 @@
-#!/usr/bin/env python
-#
-# Copyright 2007 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-import webapp2
+import webapp2, jinja2, os, re
+from google.appengine.ext import db
 
-class MainHandler(webapp2.RequestHandler):
+template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir), autoescape = True)
+
+class Post(db.Model):
+    title = db.StringProperty(required = True)
+    body = db.TextProperty(required = True)
+    created = db.DateTimeProperty(auto_now_add = True)
+
+def get_posts(self, limit):
+    q = Post.all().order('-created')
+    return q.fetch(limit=limit)
+
+class Blog(webapp2.RequestHandler):
+    page_size = 5
+    get_posts = get_posts
     def get(self):
-        self.response.write('Hello world!')
+        posts = self.get_posts(self.page_size)
+        t = jinja_env.get_template("blog.html")
+        response = t.render(posts=posts, page_size=self.page_size)
+        self.response.out.write(response)
+
+class NewPost(webapp2.RequestHandler):
+    def render_form(self, title="", body="", error=""):
+        """ Render the new post form with or without an error, based on parameters """
+        t = jinja_env.get_template("newpost.html")
+        response = t.render(title=title, body=body, error=error)
+        self.response.out.write(response)
+    def get(self):
+        self.render_form()
+    def post(self):
+        """ Create a new blog post if possible. Otherwise, return with an error message """
+        title = self.request.get("title")
+        body = self.request.get("body")
+        if title and body:
+            post = Post(
+                title=title,
+                body=body)
+            post.put()
+            id = post.key().id()
+            self.redirect("/%s" % id)
+        else:
+            error = "something went wrong..."
+            self.render_form(title, body, error)
+
+class ViewPostHandler(webapp2.RequestHandler):
+    def get(self, id):
+        post = Post.get_by_id(int(id))
+        if post:
+            t = jinja_env.get_template("post.html")
+            response = t.render(post=post)
+        else:
+            error = "there is no post with id %s" % id
+            t = jinja_env.get_template("404.html")
+            response = t.render(error=error)
+        self.response.out.write(response)
 
 app = webapp2.WSGIApplication([
-    ('/', MainHandler)
+    ('/', Blog),
+    ('/newpost', NewPost),
+    webapp2.Route('/<id:\d+>', ViewPostHandler),
 ], debug=True)
