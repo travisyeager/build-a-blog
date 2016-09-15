@@ -1,27 +1,17 @@
 {% extends 'base.html' %}
-
 {% block content %}
-
-<h1>travis' blog</h1>
-
+<h1>blog</h1>
 {% for post in posts %}
-
 <h2><a href="/{{ post.key().id() }}">{{ post.title }}</a></h2>
 <p>{{ post.body }}</p>
-<!-- TODO add author w/ link to author's blog page -->
-
 {% endfor %}
-
 {% if prev_page %}
 <a href="/?page={{ prev_page }}">&lt; prev</a>
 {% endif %}
-
 {% if prev_page and next_page %}
 &nbsp;&nbsp; | &nbsp;&nbsp;
 {% endif %}
-
 {% if next_page %}
 <a href="/?page={{ next_page }}">next &gt;</a>
 {% endif %}
-
 {% endblock %}

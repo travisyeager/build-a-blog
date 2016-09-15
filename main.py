@@ -9,29 +9,42 @@ class Post(db.Model):
     body = db.TextProperty(required = True)
     created = db.DateTimeProperty(auto_now_add = True)
 
-def get_posts(self, limit):
+def get_posts(self, limit, offset):
     q = Post.all().order('-created')
-    return q.fetch(limit=limit)
+    return q.fetch(limit=limit, offset=offset)
 
 class Blog(webapp2.RequestHandler):
     page_size = 5
     get_posts = get_posts
     def get(self):
-        posts = self.get_posts(self.page_size)
+        page = self.request.get("page")
+        offset = 0
+        page = page and int(page)
+        if page:
+            offset = (int(page) - 1) * self.page_size
+        else:
+            page = 1
+        if page > 1:
+            prev_page = page - 1
+        else:
+            prev_page = None
+        posts = self.get_posts(self.page_size, offset)
+        if len(posts) == self.page_size and Post.all().count() > offset+self.page_size:
+            next_page = page + 1
+        else:
+            next_page = None
         t = jinja_env.get_template("blog.html")
-        response = t.render(posts=posts, page_size=self.page_size)
+        response = t.render(posts=posts, page=page, page_size=self.page_size, prev_page=prev_page, next_page=next_page)
         self.response.out.write(response)
 
 class NewPost(webapp2.RequestHandler):
     def render_form(self, title="", body="", error=""):
-        """ Render the new post form with or without an error, based on parameters """
         t = jinja_env.get_template("newpost.html")
         response = t.render(title=title, body=body, error=error)
         self.response.out.write(response)
     def get(self):
         self.render_form()
     def post(self):
-        """ Create a new blog post if possible. Otherwise, return with an error message """
         title = self.request.get("title")
         body = self.request.get("body")
         if title and body:
@@ -52,7 +65,7 @@ class ViewPostHandler(webapp2.RequestHandler):
             t = jinja_env.get_template("post.html")
             response = t.render(post=post)
         else:
-            error = "there is no post with id %s" % id
+            error = id + " doesn't exist"
             t = jinja_env.get_template("404.html")
             response = t.render(error=error)
         self.response.out.write(response)
